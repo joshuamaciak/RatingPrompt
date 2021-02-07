@@ -1,10 +1,12 @@
 package com.epsilonv.ratingprompt;
 
+import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
-import android.support.v7.app.AlertDialog;
+
+import com.google.android.play.core.review.ReviewInfo;
+import com.google.android.play.core.review.ReviewManager;
+import com.google.android.play.core.review.ReviewManagerFactory;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -34,6 +36,8 @@ public class RatingPrompt {
     private int numOpens;
     // whether the prompt is still active
     private boolean active;
+    private ReviewManager reviewManager;
+    private ReviewInfo reviewInfo;
 
     private RatingPrompt(final String packageName, final String questionTitle,
                          final String questionMessage, final String ratingTitle,
@@ -49,15 +53,17 @@ public class RatingPrompt {
     public static void setBuilder(final Builder builder) {
         INSTANCE_BUILDER = builder;
     }
+
     /**
      * Gets a singleton instance of the RatingPrompt. A call to setBuilder() must be made before
      * calling get instance.
+     *
      * @return the RatingPrompt singleton
      */
     public static RatingPrompt getInstance() {
-        if(INSTANCE == null) {
+        if (INSTANCE == null) {
             synchronized (RatingPrompt.class) {
-                if(INSTANCE == null) {
+                if (INSTANCE == null) {
                     INSTANCE = INSTANCE_BUILDER.build();
                 }
             }
@@ -68,37 +74,28 @@ public class RatingPrompt {
     public void onOpen(@NotNull final Context context) {
         final SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFS_NAME,
                 Context.MODE_PRIVATE);
-        if(!IsFirstRun(prefs)) {
+        if (!IsFirstRun(prefs)) {
             readSharedPreferences(prefs);
         } else {
             active = true;
         }
         numOpens++;
         writeSharedPreferences(prefs);
+        reviewManager = ReviewManagerFactory.create(context);
+        reviewManager.requestReviewFlow().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                reviewInfo = task.getResult();
+            }
+        });
     }
 
-    public void show(@NotNull final Context context) {
-        if(doShowDialog() && active) {
-            AlertDialog.Builder rateMeBuilder = new AlertDialog.Builder(context);
-            rateMeBuilder.setTitle(ratingTitle)
-                    .setMessage(ratingMessage)
-                    .setPositiveButton("Yes", (dialog, which) ->
-                        context.startActivity(new Intent(Intent.ACTION_VIEW,
-                                Uri.parse(PLAY_STORE_LINK_BASE + packageName))))
-                    .setNegativeButton("No", (dialog, which) -> {
-                        // do nothing
-                    });
-            final AlertDialog rateMeDialog = rateMeBuilder.create();
-
-            AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            builder.setTitle(questionTitle)
-                    .setMessage(questionMessage)
-                    .setPositiveButton("Yes", (dialog, which) -> rateMeDialog.show())
-                    .setNegativeButton("No", (dialog, which) -> {
-                        // todo: show support email
-                    }).show();
+    public void show(@NotNull final Activity activity) {
+        if (doShowDialog() && active) {
+            if (reviewInfo != null) {
+                reviewManager.launchReviewFlow(activity, reviewInfo);
+            }
             active = false;
-            SetActive(context.getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE), false);
+            SetActive(activity.getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE), false);
         }
     }
 
