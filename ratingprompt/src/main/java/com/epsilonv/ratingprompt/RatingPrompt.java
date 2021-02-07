@@ -90,10 +90,8 @@ public class RatingPrompt {
     }
 
     public void show(@NotNull final Activity activity) {
-        if (doShowDialog() && active) {
-            if (reviewInfo != null) {
-                reviewManager.launchReviewFlow(activity, reviewInfo);
-            }
+        if (doShowDialog() && active && reviewInfo != null) {
+            reviewManager.launchReviewFlow(activity, reviewInfo);
             active = false;
             SetActive(activity.getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE), false);
         }
